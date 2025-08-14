@@ -1,0 +1,179 @@
+{
+  "timestamp": "2025-06-24T01:50:50.281Z",
+  "summary": {
+    "total": 21,
+    "passed": 20,
+    "failed": 0,
+    "warnings": 1
+  },
+  "results": [
+    {
+      "state": "Assam",
+      "sourceName": "Sentinel Assam",
+      "status": "pass",
+      "articlesFound": 3,
+      "validArticles": 3,
+      "timestamp": "2025-06-24T01:50:27.767Z"
+    },
+    {
+      "state": "Assam",
+      "sourceName": "The Assam Tribune",
+      "status": "pass",
+      "articlesFound": 3,
+      "validArticles": 3,
+      "timestamp": "2025-06-24T01:50:29.020Z"
+    },
+    {
+      "state": "Assam",
+      "sourceName": "Northeast Now",
+      "status": "pass",
+      "articlesFound": 3,
+      "validArticles": 3,
+      "timestamp": "2025-06-24T01:50:29.073Z"
+    },
+    {
+      "state": "Manipur",
+      "sourceName": "Northeast Today – Imphal Free Press",
+      "status": "pass",
+      "articlesFound": 3,
+      "validArticles": 3,
+      "timestamp": "2025-06-24T01:50:32.068Z"
+    },
+    {
+      "state": "Manipur",
+      "sourceName": "The Frontier Manipur",
+      "status": "pass",
+      "articlesFound": 3,
+      "validArticles": 3,
+      "timestamp": "2025-06-24T01:50:32.134Z"
+    },
+    {
+      "state": "Assam",
+      "sourceName": "Northeast Today - assam",
+      "status": "pass",
+      "articlesFound": 3,
+      "validArticles": 3,
+      "timestamp": "2025-06-24T01:50:32.154Z"
+    },
+    {
+      "state": "Manipur",
+      "sourceName": "Northeast Today - manipur",
+      "status": "pass",
+      "articlesFound": 3,
+      "validArticles": 3,
+      "timestamp": "2025-06-24T01:50:35.164Z"
+    },
+    {
+      "state": "Meghalaya",
+      "sourceName": "Meghalaya Monitor",
+      "status": "pass",
+      "articlesFound": 3,
+      "validArticles": 3,
+      "timestamp": "2025-06-24T01:50:35.855Z"
+    },
+    {
+      "state": "Meghalaya",
+      "sourceName": "The Shillong Times",
+      "status": "pass",
+      "articlesFound": 3,
+      "validArticles": 3,
+      "timestamp": "2025-06-24T01:50:36.465Z"
+    },
+    {
+      "state": "Nagaland",
+      "sourceName": "Nagaland Post",
+      "status": "pass",
+      "articlesFound": 3,
+      "validArticles": 3,
+      "timestamp": "2025-06-24T01:50:38.877Z"
+    },
+    {
+      "state": "Meghalaya",
+      "sourceName": "Northeast Today – Meghalaya",
+      "status": "pass",
+      "articlesFound": 3,
+      "validArticles": 3,
+      "timestamp": "2025-06-24T01:50:39.456Z"
+    },
+    {
+      "state": "Mizoram",
+      "sourceName": "Northeast Today – Mizoram",
+      "status": "pass",
+      "articlesFound": 3,
+      "validArticles": 3,
+      "timestamp": "2025-06-24T01:50:39.498Z"
+    },
+    {
+      "state": "Nagaland",
+      "sourceName": "The Morung Express",
+      "status": "pass",
+      "articlesFound": 3,
+      "validArticles": 3,
+      "timestamp": "2025-06-24T01:50:42.243Z"
+    },
+    {
+      "state": "Nagaland",
+      "sourceName": "Northeast Today – Nagaland",
+      "status": "pass",
+      "articlesFound": 3,
+      "validArticles": 3,
+      "timestamp": "2025-06-24T01:50:42.377Z"
+    },
+    {
+      "state": "Nagaland",
+      "sourceName": "Eastern Mirror (Nagaland)",
+      "status": "warning",
+      "articlesFound": 1,
+      "error": "Only 1 articles found (expected 2+)",
+      "timestamp": "2025-06-24T01:50:42.922Z"
+    },
+    {
+      "state": "Arunachal Pradesh",
+      "sourceName": "Arunachal24.in",
+      "status": "pass",
+      "articlesFound": 3,
+      "validArticles": 3,
+      "timestamp": "2025-06-24T01:50:45.210Z"
+    },
+    {
+      "state": "Arunachal Pradesh",
+      "sourceName": "Northeast Today – Arunachal Pradesh",
+      "status": "pass",
+      "articlesFound": 3,
+      "validArticles": 3,
+      "timestamp": "2025-06-24T01:50:45.829Z"
+    },
+    {
+      "state": "Arunachal Pradesh",
+      "sourceName": "The Arunachal Times",
+      "status": "pass",
+      "articlesFound": 3,
+      "validArticles": 3,
+      "timestamp": "2025-06-24T01:50:46.877Z"
+    },
+    {
+      "state": "Tripura",
+      "sourceName": "Northeast Today - tripura",
+      "status": "pass",
+      "articlesFound": 3,
+      "validArticles": 3,
+      "timestamp": "2025-06-24T01:50:49.936Z"
+    },
+    {
+      "state": "Sikkim",
+      "sourceName": "Northeast Today – Sikkim",
+      "status": "pass",
+      "articlesFound": 3,
+      "validArticles": 3,
+      "timestamp": "2025-06-24T01:50:49.997Z"
+    },
+    {
+      "state": "Tripura",
+      "sourceName": "Tripura Times",
+      "status": "pass",
+      "articlesFound": 2,
+      "validArticles": 2,
+      "timestamp": "2025-06-24T01:50:50.279Z"
+    }
+  ]
+}

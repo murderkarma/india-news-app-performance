@@ -1,0 +1,196 @@
+name: Performance Test (Smoke)
+
+on:
+  pull_request:
+    paths:
+      - "india-news-app/backend/**"
+      - ".github/workflows/performance-test.yml"
+      - "india-news-app/load/**"
+    types: [opened, synchronize, reopened]
+
+env:
+  NODE_VERSION: "18"
+  MONGODB_URI: ${{ secrets.MONGODB_URI_TEST }}
+  JWT_SECRET: ${{ secrets.JWT_SECRET_TEST }}
+  REDIS_URL: ${{ secrets.REDIS_URL_TEST }}
+  TEST_MODE: true
+
+jobs:
+  performance-smoke-test:
+    name: K6 Smoke Test (30s/50VU)
+    runs-on: ubuntu-latest
+
+    services:
+      mongodb:
+        image: mongo:6.0
+        ports:
+          - 27017:27017
+        options: >-
+          --health-cmd "mongosh --eval 'db.runCommand({ping: 1})'"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: "npm"
+          cache-dependency-path: "india-news-app/backend/package-lock.json"
+
+      - name: Install backend dependencies
+        working-directory: india-news-app/backend
+        run: npm ci
+
+      - name: Setup test environment
+        working-directory: india-news-app/backend
+        run: |
+          # Create test users for load testing
+          node createTestUser.js || echo "Test user creation completed"
+
+      - name: Start API server
+        working-directory: india-news-app/backend
+        run: |
+          # Start server in background
+          npm start &
+          echo $! > server.pid
+
+          # Wait for server to be ready
+          timeout 30 bash -c 'until curl -f http://localhost:8080/health; do sleep 1; done'
+
+          # Verify server is responding
+          curl -f http://localhost:8080/health || exit 1
+        env:
+          PORT: 8080
+          NODE_ENV: test
+          MONGODB_URI: mongodb://localhost:27017/northeast-forum-test
+
+      - name: Install k6
+        run: |
+          sudo gpg -k
+          sudo gpg --no-default-keyring --keyring /usr/share/keyrings/k6-archive-keyring.gpg --keyserver hkp://keyserver.ubuntu.com:80 --recv-keys C5AD17C747E3415A3642D57D77C6C491D6AC1D69
+          echo "deb [signed-by=/usr/share/keyrings/k6-archive-keyring.gpg] https://dl.k6.io/deb stable main" | sudo tee /etc/apt/sources.list.d/k6.list
+          sudo apt-get update
+          sudo apt-get install k6
+
+      - name: Run K6 smoke test
+        working-directory: india-news-app/load
+        run: |
+          # Run 30s smoke test with 50 VUs
+          k6 run \
+            --env BASE_URL=http://localhost:8080 \
+            --env TEST_DURATION=30s \
+            --vus 50 \
+            --duration 30s \
+            --out json=smoke-test-results.json \
+            --summary-export=smoke-test-summary.json \
+            smoke-test.js
+        env:
+          K6_NO_USAGE_REPORT: true
+
+      - name: Check performance thresholds
+        working-directory: india-news-app/load
+        run: |
+          # Parse results and check thresholds
+          node -e "
+            const fs = require('fs');
+            const results = JSON.parse(fs.readFileSync('smoke-test-summary.json', 'utf8'));
+            
+            console.log('=== Performance Test Results ===');
+            console.log('HTTP Request Duration (p95):', results.metrics.http_req_duration?.values?.['p(95)'] || 'N/A');
+            console.log('HTTP Request Failed Rate:', results.metrics.http_req_failed?.values?.rate || 'N/A');
+            console.log('Total Requests:', results.metrics.http_reqs?.values?.count || 'N/A');
+            console.log('Requests/sec:', results.metrics.http_reqs?.values?.rate || 'N/A');
+            
+            // Check thresholds
+            const p95 = results.metrics.http_req_duration?.values?.['p(95)'] || 0;
+            const errorRate = results.metrics.http_req_failed?.values?.rate || 0;
+            
+            if (p95 > 500) {
+              console.error('❌ FAIL: p95 response time (' + p95 + 'ms) exceeds 500ms threshold');
+              process.exit(1);
+            }
+            
+            if (errorRate > 0.01) {
+              console.error('❌ FAIL: Error rate (' + (errorRate * 100).toFixed(2) + '%) exceeds 1% threshold');
+              process.exit(1);
+            }
+            
+            console.log('✅ PASS: All performance thresholds met');
+          "
+
+      - name: Upload test results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: performance-test-results
+          path: |
+            india-news-app/load/smoke-test-results.json
+            india-news-app/load/smoke-test-summary.json
+          retention-days: 30
+
+      - name: Comment PR with results
+        uses: actions/github-script@v7
+        if: always()
+        with:
+          script: |
+            const fs = require('fs');
+            const path = 'india-news-app/load/smoke-test-summary.json';
+
+            if (!fs.existsSync(path)) {
+              console.log('No test results found');
+              return;
+            }
+
+            const results = JSON.parse(fs.readFileSync(path, 'utf8'));
+            const p95 = results.metrics.http_req_duration?.values?.['p(95)'] || 0;
+            const errorRate = results.metrics.http_req_failed?.values?.rate || 0;
+            const totalReqs = results.metrics.http_reqs?.values?.count || 0;
+            const rps = results.metrics.http_reqs?.values?.rate || 0;
+
+            const passed = p95 <= 500 && errorRate <= 0.01;
+            const status = passed ? '✅ PASSED' : '❌ FAILED';
+
+            const comment = `## 🚀 Performance Test Results ${status}
+
+            **Smoke Test (30s/50VU)**
+
+            | Metric | Value | Threshold | Status |
+            |--------|-------|-----------|---------|
+            | Response Time (p95) | ${p95.toFixed(0)}ms | ≤500ms | ${p95 <= 500 ? '✅' : '❌'} |
+            | Error Rate | ${(errorRate * 100).toFixed(2)}% | ≤1% | ${errorRate <= 0.01 ? '✅' : '❌'} |
+            | Total Requests | ${totalReqs} | - | ℹ️ |
+            | Requests/sec | ${rps.toFixed(1)} | - | ℹ️ |
+
+            ${passed ? 
+              '🎉 **All performance thresholds met!** This PR maintains system performance standards.' : 
+              '⚠️ **Performance thresholds exceeded.** Please review the changes for potential performance impacts.'
+            }
+
+            <details>
+            <summary>View detailed results</summary>
+
+            \`\`\`json
+            ${JSON.stringify(results.metrics, null, 2)}
+            \`\`\`
+            </details>`;
+
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: comment
+            });
+
+      - name: Stop API server
+        if: always()
+        working-directory: india-news-app/backend
+        run: |
+          if [ -f server.pid ]; then
+            kill $(cat server.pid) || true
+            rm server.pid
+          fi

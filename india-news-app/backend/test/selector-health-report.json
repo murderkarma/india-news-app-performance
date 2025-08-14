@@ -1,0 +1,49 @@
+{
+  "timestamp": "2025-06-24T01:50:50.287Z",
+  "overallHealth": "95.2",
+  "stateHealth": {
+    "Assam": {
+      "successRate": "100.0",
+      "workingSources": 4,
+      "totalSources": 4
+    },
+    "Manipur": {
+      "successRate": "100.0",
+      "workingSources": 3,
+      "totalSources": 3
+    },
+    "Meghalaya": {
+      "successRate": "100.0",
+      "workingSources": 3,
+      "totalSources": 3
+    },
+    "Nagaland": {
+      "successRate": "75.0",
+      "workingSources": 3,
+      "totalSources": 4
+    },
+    "Mizoram": {
+      "successRate": "100.0",
+      "workingSources": 1,
+      "totalSources": 1
+    },
+    "Arunachal Pradesh": {
+      "successRate": "100.0",
+      "workingSources": 3,
+      "totalSources": 3
+    },
+    "Tripura": {
+      "successRate": "100.0",
+      "workingSources": 2,
+      "totalSources": 2
+    },
+    "Sikkim": {
+      "successRate": "100.0",
+      "workingSources": 1,
+      "totalSources": 1
+    }
+  },
+  "recommendations": [
+    "Check warning sources for potential improvements"
+  ]
+}
