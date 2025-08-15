@@ -14,7 +14,6 @@ permissions:
 
 env:
   NODE_VERSION: "18"
-  TEST_MODE: true
 
 jobs:
   performance-smoke-test:
@@ -47,80 +46,73 @@ jobs:
         working-directory: india-news-app/backend
         run: npm ci
 
-      - name: Setup test environment
+      - name: Start backend
         working-directory: india-news-app/backend
         run: |
-          # Create test users for load testing
-          node createTestUser.js || echo "Test user creation completed"
-
-      - name: Start API server
-        working-directory: india-news-app/backend
-        run: |
-          # Start load test server in background with logging
           echo "Starting server with environment:"
-          echo "MONGODB_URI: $MONGODB_URI"
-          echo "JWT_SECRET: $JWT_SECRET"
+          echo "PORT: $PORT"
+          echo "NODE_ENV: $NODE_ENV"
           echo "TEST_MODE: $TEST_MODE"
+          echo "MONGODB_URI: $MONGODB_URI"
 
-          node server-loadtest.js > server.log 2>&1 &
-          SERVER_PID=$!
-          echo $SERVER_PID > server.pid
-          echo "Started server with PID: $SERVER_PID"
+          node server.js > server.log 2>&1 & echo $! > server.pid
+          echo "Started server with PID: $(cat server.pid)"
 
-          # Wait longer for server to be ready
-          echo "Waiting for server to start..."
-          sleep 15
-
-          # Show server logs for debugging
-          echo "=== Server startup logs ==="
-          if [ -f server.log ]; then
-            tail -20 server.log
-          fi
-
-          # Test basic connectivity with more retries
-          echo "Testing server connectivity..."
+          # Wait for server to be ready with health checks
           for i in {1..30}; do
-            if curl -f http://localhost:8080/ 2>/dev/null; then
-              echo "✅ Server is responding on attempt $i"
+            if curl -fsS http://127.0.0.1:8080/health; then
+              echo "✅ Server is ready on attempt $i"
               break
             fi
-            echo "Attempt $i failed, retrying in 2 seconds..."
-            sleep 2
+            echo "Attempt $i: Server not ready, waiting..."
+            sleep 1
             if [ $i -eq 30 ]; then
               echo "❌ Server failed to start after 30 attempts"
-              # Show server logs for debugging
-              ps aux | grep node
-              netstat -tlnp | grep 8080
-              # Show server logs if available
-              if [ -f server.log ]; then
-                echo "=== Server Logs ==="
-                tail -50 server.log
-              fi
+              echo "=== Server Logs ==="
+              cat server.log || echo "No server logs found"
               exit 1
             fi
           done
 
-          # Test health endpoint specifically
-          echo "Testing health endpoint..."
-          curl -v http://localhost:8080/health || echo "Health endpoint failed"
-
-          # Test auth endpoints
-          echo "Testing auth endpoints..."
-          curl -v http://localhost:8080/api/auth/register -X POST -H "Content-Type: application/json" -d '{"test":"data"}' || echo "Auth endpoint failed"
-
-          # Final verification
-          curl -v http://localhost:8080/ || exit 1
-          echo "✅ Server is running and responding"
+          # Final health check
+          curl -fsS http://127.0.0.1:8080/health
+          echo "✅ Server is running and healthy"
         env:
           PORT: 8080
           NODE_ENV: test
-          MONGODB_URI: mongodb://localhost:27017/northeast-forum-test
-          JWT_SECRET: test-jwt-secret-for-ci
-          TEST_MODE: true
-          # Add missing environment variables that the server needs
-          UPSTASH_REDIS_REST_URL: http://localhost:6379
-          UPSTASH_REDIS_REST_TOKEN: fake-token-for-testing
-          CORS_ORIGINS: http://localhost:8080
+          TEST_MODE: "true"
+          JWT_SECRET: testsecret
+          MONGODB_URI: mongodb://127.0.0.1:27017/yap_test
+          NOTIFICATIONS_ENABLED: "false"
+          IMAGE_UPLOADS_ENABLED: "false"
+          REDIS_URL: ${{ secrets.UPSTASH_REDIS_URL || 'redis://localhost:6379' }}
+          UPSTASH_REDIS_REST_URL: ${{ secrets.UPSTASH_REDIS_REST_URL || 'http://localhost:6379' }}
+          UPSTASH_REDIS_REST_TOKEN: ${{ secrets.UPSTASH_REDIS_REST_TOKEN || 'fake-token' }}
+          CORS_ORIGINS: http://127.0.0.1:8080
+
+      - name: Seed & get token
+        working-directory: india-news-app/backend
+        run: |
+          # Register test user (may fail if exists, that's OK)
+          curl -fsS -X POST http://127.0.0.1:8080/api/auth/register \
+            -H 'Content-Type: application/json' \
+            -d '{"username":"loadtest","password":"Passw0rd!","gender":"male","state":"assam"}' || true
+
+          # Login and get token
+          TOKEN=$(curl -fsS -X POST http://127.0.0.1:8080/api/auth/login \
+            -H 'Content-Type: application/json' \
+            -d '{"username":"loadtest","password":"Passw0rd!"}' | jq -r .token)
+
+          # Verify token was obtained
+          if [ -z "$TOKEN" ] || [ "$TOKEN" = "null" ]; then
+            echo "❌ Failed to get auth token"
+            echo "=== Server Logs ==="
+            tail -50 server.log || echo "No server logs found"
+            exit 1
+          fi
+
+          echo "✅ Got auth token: ${TOKEN:0:20}..."
+          echo "TOKEN=$TOKEN" >> $GITHUB_ENV
 
       - name: Install k6
         run: |
@@ -130,19 +122,16 @@ jobs:
           sudo apt-get update
           sudo apt-get install k6
 
-      - name: Run K6 smoke test
+      - name: Run k6 smoke test
         working-directory: india-news-app/load
         run: |
-          # Run 30s smoke test with 50 VUs
           k6 run \
-            --env BASE_URL=http://localhost:8080 \
-            --env TEST_DURATION=30s \
-            --vus 50 \
-            --duration 30s \
             --out json=smoke-test-results.json \
             --summary-export=smoke-test-summary.json \
             smoke-test.js
         env:
+          BASE_URL: http://127.0.0.1:8080
+          TOKEN: ${{ env.TOKEN }}
           K6_NO_USAGE_REPORT: true
 
       - name: Check performance thresholds
@@ -158,6 +147,13 @@ jobs:
             console.log('HTTP Request Failed Rate:', results.metrics.http_req_failed?.values?.rate || 'N/A');
             console.log('Total Requests:', results.metrics.http_reqs?.values?.count || 'N/A');
             console.log('Requests/sec:', results.metrics.http_reqs?.values?.rate || 'N/A');
+            
+            // Print status code histogram
+            console.log('=== Status Code Histogram ===');
+            const statusCodes = results.metrics.status_codes?.values || {};
+            Object.keys(statusCodes).forEach(code => {
+              console.log(\`Status \${code}: \${statusCodes[code]} requests\`);
+            });
             
             // Check thresholds
             const p95 = results.metrics.http_req_duration?.values?.['p(95)'] || 0;
@@ -175,6 +171,21 @@ jobs:
             
             console.log('✅ PASS: All performance thresholds met');
           "
+
+      - name: Upload server log
+        if: always()
+        working-directory: india-news-app/backend
+        run: |
+          # Stop server gracefully
+          if [ -f server.pid ]; then
+            kill $(cat server.pid) || true
+            rm server.pid
+          fi
+
+          # Show system info for debugging
+          echo "=== System Info ==="
+          ps aux | grep node || true
+          netstat -tlnp | grep 8080 || true
 
       - name: Upload test results
         uses: actions/upload-artifact@v4
@@ -209,6 +220,13 @@ jobs:
             const totalReqs = results.metrics.http_reqs?.values?.count || 0;
             const rps = results.metrics.http_reqs?.values?.rate || 0;
 
+            // Status code histogram
+            const statusCodes = results.metrics.status_codes?.values || {};
+            let statusTable = '';
+            Object.keys(statusCodes).forEach(code => {
+              statusTable += `| ${code} | ${statusCodes[code]} |\n`;
+            });
+
             const passed = p95 <= 500 && errorRate <= 0.01;
             const status = passed ? '✅ PASSED' : '❌ FAILED';
 
@@ -222,6 +240,11 @@ jobs:
             | Error Rate | ${(errorRate * 100).toFixed(2)}% | ≤1% | ${errorRate <= 0.01 ? '✅' : '❌'} |
             | Total Requests | ${totalReqs} | - | ℹ️ |
             | Requests/sec | ${rps.toFixed(1)} | - | ℹ️ |
+
+            **Status Code Distribution:**
+            | Code | Count |
+            |------|-------|
+            ${statusTable}
 
             ${passed ? 
               '🎉 **All performance thresholds met!** This PR maintains system performance standards.' : 
@@ -242,12 +265,3 @@ jobs:
               repo: context.repo.repo,
               body: comment
             });
-
-      - name: Stop API server
-        if: always()
-        working-directory: india-news-app/backend
-        run: |
-          if [ -f server.pid ]; then
-            kill $(cat server.pid) || true
-            rm server.pid
-          fi

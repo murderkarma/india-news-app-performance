@@ -12,6 +12,13 @@ import { Rate, Trend, Counter } from 'k6/metrics';
 const errorRate = new Rate('errors');
 const responseTime = new Trend('response_time');
 const requestCount = new Counter('requests');
+export let StatusCodes = new Counter('status_codes');
+
+// Record response status codes for debugging
+function record(res) {
+  StatusCodes.add(1, { code: String(res.status) });
+  return res;
+}
 
 // Configuration
 const BASE_URL = __ENV.BASE_URL || 'http://localhost:8080';
@@ -41,7 +48,9 @@ export const options = {
     http_req_duration: ['p(95)<500'], // 95% of requests under 500ms
     http_req_failed: ['rate<0.01'],   // Less than 1% errors
     errors: ['rate<0.01'],
-    response_time: ['p(95)<500']
+    response_time: ['p(95)<500'],
+    'status_codes{code:200}': ['count>100'], // Expect at least 100 successful requests
+    'status_codes{code:201}': ['count>10'],  // Expect some creates
   },
   
   // Test metadata
@@ -101,13 +110,11 @@ export function setup() {
 export default function(data) {
   const startTime = Date.now();
   
-  // Select random user and auth token
-  const usernames = Object.keys(data.tokens);
-  const randomUser = usernames[Math.floor(Math.random() * usernames.length)];
-  const authToken = data.tokens[randomUser];
+  // Use token from environment (set by CI) or fallback to setup tokens
+  const authToken = __ENV.TOKEN || (data.tokens && Object.values(data.tokens)[0]);
   
   if (!authToken) {
-    console.error(`No auth token for user ${randomUser}`);
+    console.error('No auth token available');
     return;
   }
   
@@ -146,7 +153,7 @@ function testGetPosts(headers) {
   const limit = [10, 20][Math.floor(Math.random() * 2)];
   
   const url = `${BASE_URL}/api/posts?space=${space}&sort=${sort}&limit=${limit}`;
-  const response = http.get(url, { headers });
+  const response = record(http.get(url, { headers }));
   
   const success = check(response, {
     'GET posts status is 200': (r) => r.status === 200,
@@ -193,7 +200,7 @@ function testCreatePost(headers) {
     topic: space === 'yap' ? 'random' : 'discussion'
   };
   
-  const response = http.post(`${BASE_URL}/api/posts`, JSON.stringify(payload), { headers });
+  const response = record(http.post(`${BASE_URL}/api/posts`, JSON.stringify(payload), { headers }));
   
   const success = check(response, {
     'POST create status is 201': (r) => r.status === 201,
@@ -235,7 +242,7 @@ function testAddReaction(headers) {
   const reactionType = reactionTypes[Math.floor(Math.random() * reactionTypes.length)];
   
   const payload = { type: reactionType };
-  const response = http.post(`${BASE_URL}/api/posts/${postId}/react`, JSON.stringify(payload), { headers });
+  const response = record(http.post(`${BASE_URL}/api/posts/${postId}/react`, JSON.stringify(payload), { headers }));
   
   const success = check(response, {
     'POST reaction status is 204 or 200': (r) => r.status === 204 || r.status === 200,
