@@ -22,9 +22,9 @@ export const options = {
   vus: 50,
   duration: '30s',
   thresholds: {
-    http_req_failed: ['rate<0.02'],         // allow up to 2% failures (CI infra quirks)
-    http_req_duration: ['p(95)<500'],       // p95 < 500ms
-    'status_codes{code:200}': ['count>100']
+    http_req_failed: ['rate<0.02'],        // allow up to 2% failures (CI infra quirks)
+    http_req_duration: ['p(95)<500'],      // p95 < 500ms
+    http_reqs: ['count>300']               // ensure we generated enough traffic
   },
 };
 

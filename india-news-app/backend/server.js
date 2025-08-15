@@ -1,5 +1,5 @@
 console.log("server.js loaded from:", __filename);
-// Trigger workflow test - validating performance fixes
+// Trigger workflow test - running ChatGPT's improved k6 test
 
 const mongoose = require('mongoose');
 const express = require('express');
