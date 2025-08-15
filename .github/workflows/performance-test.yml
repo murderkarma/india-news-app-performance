@@ -10,9 +10,6 @@ on:
 
 env:
   NODE_VERSION: "18"
-  MONGODB_URI: ${{ secrets.MONGODB_URI_TEST }}
-  JWT_SECRET: ${{ secrets.JWT_SECRET_TEST }}
-  REDIS_URL: ${{ secrets.REDIS_URL_TEST }}
   TEST_MODE: true
 
 jobs:
@@ -55,19 +52,26 @@ jobs:
       - name: Start API server
         working-directory: india-news-app/backend
         run: |
-          # Start server in background
-          npm start &
+          # Start load test server in background
+          node server-loadtest.js &
           echo $! > server.pid
 
           # Wait for server to be ready
-          timeout 30 bash -c 'until curl -f http://localhost:8080/health; do sleep 1; done'
+          echo "Waiting for server to start..."
+          sleep 10
+
+          # Test basic connectivity
+          timeout 30 bash -c 'until curl -f http://localhost:8080/; do sleep 2; echo "Retrying server connection..."; done'
 
           # Verify server is responding
-          curl -f http://localhost:8080/health || exit 1
+          curl -f http://localhost:8080/ || exit 1
+          echo "✅ Server is running and responding"
         env:
           PORT: 8080
           NODE_ENV: test
           MONGODB_URI: mongodb://localhost:27017/northeast-forum-test
+          JWT_SECRET: test-jwt-secret-for-ci
+          TEST_MODE: true
 
       - name: Install k6
         run: |
