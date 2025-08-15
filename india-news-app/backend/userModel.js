@@ -19,15 +19,29 @@ const userSchema = new mongoose.Schema({
     type: String,
     required: true,
     enum: [
-      'Assam', 'Meghalaya', 'Manipur', 'Mizoram', 'Nagaland', 
+      'Assam', 'Meghalaya', 'Manipur', 'Mizoram', 'Nagaland',
       'Arunachal Pradesh', 'Tripura', 'Sikkim',
       'Gujarat', 'Maharashtra'
-    ]
+    ],
+    set: function(value) {
+      // Normalize to title case for state names
+      if (typeof value === 'string') {
+        return value.charAt(0).toUpperCase() + value.slice(1).toLowerCase();
+      }
+      return value;
+    }
   },
   gender: {
     type: String,
     required: true,
-    enum: ['male', 'female', 'other']
+    enum: ['male', 'female', 'other'],
+    set: function(value) {
+      // Normalize to lowercase for gender
+      if (typeof value === 'string') {
+        return value.toLowerCase();
+      }
+      return value;
+    }
   },
   karma: {
     type: Number,
