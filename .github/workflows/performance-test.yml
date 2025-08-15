@@ -8,6 +8,10 @@ on:
       - "india-news-app/load/**"
     types: [opened, synchronize, reopened]
 
+permissions:
+  contents: read
+  pull-requests: write
+
 env:
   NODE_VERSION: "18"
   TEST_MODE: true
@@ -54,17 +58,34 @@ jobs:
         run: |
           # Start load test server in background
           node server-loadtest.js &
-          echo $! > server.pid
+          SERVER_PID=$!
+          echo $SERVER_PID > server.pid
+          echo "Started server with PID: $SERVER_PID"
 
-          # Wait for server to be ready
+          # Wait longer for server to be ready
           echo "Waiting for server to start..."
-          sleep 10
+          sleep 15
 
-          # Test basic connectivity
-          timeout 30 bash -c 'until curl -f http://localhost:8080/; do sleep 2; echo "Retrying server connection..."; done'
+          # Test basic connectivity with more retries
+          echo "Testing server connectivity..."
+          for i in {1..30}; do
+            if curl -f http://localhost:8080/ 2>/dev/null; then
+              echo "✅ Server is responding on attempt $i"
+              break
+            fi
+            echo "Attempt $i failed, retrying in 2 seconds..."
+            sleep 2
+            if [ $i -eq 30 ]; then
+              echo "❌ Server failed to start after 30 attempts"
+              # Show server logs for debugging
+              ps aux | grep node
+              netstat -tlnp | grep 8080
+              exit 1
+            fi
+          done
 
-          # Verify server is responding
-          curl -f http://localhost:8080/ || exit 1
+          # Final verification
+          curl -v http://localhost:8080/ || exit 1
           echo "✅ Server is running and responding"
         env:
           PORT: 8080
@@ -140,7 +161,10 @@ jobs:
       - name: Comment PR with results
         uses: actions/github-script@v7
         if: always()
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
             const fs = require('fs');
             const path = 'india-news-app/load/smoke-test-summary.json';
