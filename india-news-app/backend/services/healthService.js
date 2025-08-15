@@ -196,7 +196,7 @@ class HealthService {
    */
   async checkAuthSystem() {
     try {
-      const User = require('../models/User');
+      const User = require('../userModel');
       const start = Date.now();
       
       // Get user stats

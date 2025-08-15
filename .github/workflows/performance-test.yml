@@ -14,6 +14,16 @@ permissions:
 
 env:
   NODE_VERSION: "18"
+  TEST_MODE: "true"
+  NODE_ENV: test
+  JWT_SECRET: testsecret
+  MONGODB_URI: mongodb://127.0.0.1:27017/yap_test
+  NOTIFICATIONS_ENABLED: "false"
+  IMAGE_UPLOADS_ENABLED: "false"
+
+defaults:
+  run:
+    working-directory: .
 
 jobs:
   performance-smoke-test:
