@@ -28,12 +28,23 @@ const readLimiter = new Ratelimit({
 });
 
 function bypass(req) {
-  return process.env.TEST_MODE === 'true' || req.headers['x-load-test'] === '1';
+  const shouldBypass = process.env.TEST_MODE === 'true' || req.headers['x-load-test'] === '1';
+  if (shouldBypass) {
+    console.log(`🚫 Rate limit bypassed for ${req.method} ${req.path} (TEST_MODE: ${process.env.TEST_MODE}, x-load-test: ${req.headers['x-load-test']})`);
+  }
+  return shouldBypass;
 }
 
 function limitWrites() {
   return async (req, res, next) => {
+    // Early bypass check - no Redis calls at all
     if (bypass(req)) return next();
+    
+    // Skip rate limiting if Redis credentials are missing (CI environment)
+    if (!process.env.UPSTASH_REDIS_REST_URL || !process.env.UPSTASH_REDIS_REST_TOKEN) {
+      console.log('⚠️  Skipping rate limiting - Redis credentials missing');
+      return next();
+    }
     
     try {
       const key = req.user?.id ? `user:${req.user.id}` : `ip:${req.ip}`;
@@ -44,6 +55,7 @@ function limitWrites() {
       res.set('X-RateLimit-Reset', String(reset));
       
       if (!success) {
+        console.log(`🚫 Write rate limit exceeded for ${key}`);
         return res.status(429).json({ error: 'Too many requests' });
       }
       
@@ -58,13 +70,21 @@ function limitWrites() {
 
 function limitReads() {
   return async (req, res, next) => {
+    // Early bypass check - no Redis calls at all
     if (bypass(req)) return next();
+    
+    // Skip rate limiting if Redis credentials are missing (CI environment)
+    if (!process.env.UPSTASH_REDIS_REST_URL || !process.env.UPSTASH_REDIS_REST_TOKEN) {
+      console.log('⚠️  Skipping rate limiting - Redis credentials missing');
+      return next();
+    }
     
     try {
       const key = req.user?.id ? `user:${req.user.id}` : `ip:${req.ip}`;
       const { success } = await readLimiter.limit(key);
       
       if (!success) {
+        console.log(`🚫 Read rate limit exceeded for ${key}`);
         return res.status(429).json({ error: 'Too many requests' });
       }
       

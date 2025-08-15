@@ -44,8 +44,9 @@ module.exports = async function auth(req, res, next) {
 
     // 3) Extract minimal claims (no DB query needed)
     const claims = {
-      sub: payload.sub,
-      id: payload.sub, // Backward compatibility
+      sub: payload.sub || payload.userId, // Handle both formats
+      id: payload.sub || payload.userId, // Backward compatibility
+      userId: payload.userId || payload.sub, // Support legacy field
       role: payload.role || 'user',
       gender: payload.gender,
       state: payload.state,
@@ -110,8 +111,9 @@ module.exports.optional = async function optionalAuth(req, res, next) {
 
     const payload = jwt.verify(token, process.env.JWT_SECRET, { clockTolerance: 5 });
     const claims = {
-      sub: payload.sub,
-      id: payload.sub,
+      sub: payload.sub || payload.userId, // Handle both formats
+      id: payload.sub || payload.userId, // Backward compatibility
+      userId: payload.userId || payload.sub, // Support legacy field
       role: payload.role || 'user',
       gender: payload.gender,
       state: payload.state,

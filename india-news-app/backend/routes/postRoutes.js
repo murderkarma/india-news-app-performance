@@ -176,11 +176,15 @@ router.post('/', auth, limitWrites(), applySpaceGates, asyncWrap(async (req, res
     const { space } = validatedData;
     
     console.log(`📝 POST /api/posts - Space: ${space}, User: ${req.user.username}`);
+    console.log(`🔍 DEBUG req.user:`, JSON.stringify(req.user, null, 2));
     
     // Create new post with space-specific defaults
+    const userId = req.user.id || req.user.sub || req.user.userId;
+    console.log(`🔍 DEBUG userId resolved to:`, userId);
+    
     const postData = {
       space,
-      userId: req.user._id || req.user.userId,
+      userId: userId,
       title: validatedData.title,
       body: validatedData.body,
       images: validatedData.images || [],
@@ -206,7 +210,7 @@ router.post('/', auth, limitWrites(), applySpaceGates, asyncWrap(async (req, res
     res.status(201).json({
       success: true,
       message: 'Post created successfully',
-      post: formatPost(post, req.user._id || req.user.userId, space)
+      post: formatPost(post, req.user.id || req.user.sub, space)
     });
 
   } catch (error) {
@@ -362,7 +366,7 @@ router.get('/', auth.optional, applySpaceGates, asyncWrap(async (req, res) => {
 router.post('/:id/react', auth, limitWrites(), asyncWrap(async (req, res) => {
   try {
     const { id } = req.params;
-    const userId = req.user._id || req.user.userId;
+    const userId = req.user.id || req.user.sub;
     
     console.log(`💖 POST /api/posts/${id}/react - User: ${req.user.username}`);
     
@@ -457,7 +461,7 @@ router.post('/:id/react', auth, limitWrites(), asyncWrap(async (req, res) => {
 router.post('/:id/comments', auth, limitWrites(), asyncWrap(async (req, res) => {
   try {
     const { id } = req.params;
-    const userId = req.user._id || req.user.userId;
+    const userId = req.user.id || req.user.sub;
     
     console.log(`💬 POST /api/posts/${id}/comments - User: ${req.user.username}`);
     
@@ -560,7 +564,7 @@ router.post('/:id/comments', auth, limitWrites(), asyncWrap(async (req, res) => 
 router.get('/:id', auth.optional, asyncWrap(async (req, res) => {
   try {
     const { id } = req.params;
-    const userId = req.user ? (req.user._id || req.user.userId) : null;
+    const userId = req.user ? (req.user.id || req.user.sub) : null;
     
     console.log(`📖 GET /api/posts/${id}`);
     
