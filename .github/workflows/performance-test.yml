@@ -56,8 +56,13 @@ jobs:
       - name: Start API server
         working-directory: india-news-app/backend
         run: |
-          # Start load test server in background
-          node server-loadtest.js &
+          # Start load test server in background with logging
+          echo "Starting server with environment:"
+          echo "MONGODB_URI: $MONGODB_URI"
+          echo "JWT_SECRET: $JWT_SECRET"
+          echo "TEST_MODE: $TEST_MODE"
+
+          node server-loadtest.js > server.log 2>&1 &
           SERVER_PID=$!
           echo $SERVER_PID > server.pid
           echo "Started server with PID: $SERVER_PID"
@@ -65,6 +70,12 @@ jobs:
           # Wait longer for server to be ready
           echo "Waiting for server to start..."
           sleep 15
+
+          # Show server logs for debugging
+          echo "=== Server startup logs ==="
+          if [ -f server.log ]; then
+            tail -20 server.log
+          fi
 
           # Test basic connectivity with more retries
           echo "Testing server connectivity..."
@@ -80,9 +91,22 @@ jobs:
               # Show server logs for debugging
               ps aux | grep node
               netstat -tlnp | grep 8080
+              # Show server logs if available
+              if [ -f server.log ]; then
+                echo "=== Server Logs ==="
+                tail -50 server.log
+              fi
               exit 1
             fi
           done
+
+          # Test health endpoint specifically
+          echo "Testing health endpoint..."
+          curl -v http://localhost:8080/health || echo "Health endpoint failed"
+
+          # Test auth endpoints
+          echo "Testing auth endpoints..."
+          curl -v http://localhost:8080/api/auth/register -X POST -H "Content-Type: application/json" -d '{"test":"data"}' || echo "Auth endpoint failed"
 
           # Final verification
           curl -v http://localhost:8080/ || exit 1
@@ -93,6 +117,10 @@ jobs:
           MONGODB_URI: mongodb://localhost:27017/northeast-forum-test
           JWT_SECRET: test-jwt-secret-for-ci
           TEST_MODE: true
+          # Add missing environment variables that the server needs
+          UPSTASH_REDIS_REST_URL: http://localhost:6379
+          UPSTASH_REDIS_REST_TOKEN: fake-token-for-testing
+          CORS_ORIGINS: http://localhost:8080
 
       - name: Install k6
         run: |
@@ -156,6 +184,7 @@ jobs:
           path: |
             india-news-app/load/smoke-test-results.json
             india-news-app/load/smoke-test-summary.json
+            india-news-app/backend/server.log
           retention-days: 30
 
       - name: Comment PR with results
