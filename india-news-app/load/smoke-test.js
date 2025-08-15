@@ -15,31 +15,59 @@ const requestCount = new Counter('requests');
 export let StatusCodes = new Counter('status_codes');
 export const http_status = new Counter('http_status');
 
-// Record response status codes for debugging
+// Record response status codes for debugging with detailed error logging
 function record(res) {
   StatusCodes.add(1, { code: String(res.status) });
-  http_status.add(1, { status: String(res.status) });
+  http_status.add(1, { code: String(res.status), path: res.url.split('?')[0] });
+  
+  // Log errors in detail when K6_LOG_ERRORS is enabled
+  if (res.status >= 400 && __ENV.K6_LOG_ERRORS === '1') {
+    console.warn('ERR', res.status, res.url, (res.body || '').slice(0, 160));
+  }
+  
   return res;
 }
 
 // Configuration
 const BASE_URL = __ENV.BASE_URL || 'http://localhost:8080';
 
-// Test data
+// Test data - properly formatted for schema validation
 const testUsers = [
   { username: 'loadtest1', password: 'test123', gender: 'female', state: 'Assam' },
   { username: 'loadtest2', password: 'test123', gender: 'male', state: 'Meghalaya' },
   { username: 'loadtest3', password: 'test123', gender: 'female', state: 'Manipur' }
 ];
 
+// Valid states (proper case for enum validation)
+const STATES = ['Assam', 'Arunachal Pradesh', 'Manipur', 'Meghalaya', 'Mizoram', 'Nagaland', 'Sikkim', 'Tripura'];
+const SPACES = ['yap', 'tea', 'brospace', 'local'];
+const TOPICS = ['discussion', 'help', 'news', 'humor', 'random'];
+
+// Generate valid post bodies (10+ chars, under 8000)
 const postBodies = [
-  'Smoke test post for performance validation.',
-  'Testing API response times under light load.',
-  'Quick performance check for PR validation.'
+  'Smoke test post for performance validation with proper length requirements.',
+  'Testing API response times under light load with detailed content for validation.',
+  'Quick performance check for PR validation ensuring minimum character requirements are met.'
 ];
 
 const reactionTypes = ['heart', 'laugh', 'fire'];
-const spaces = ['yap', 'tea', 'brospace'];
+
+// Generate 100% valid post payload
+function validPost() {
+  const space = SPACES[Math.floor(Math.random() * SPACES.length)];
+  const state = STATES[Math.floor(Math.random() * STATES.length)];
+  const topic = TOPICS[Math.floor(Math.random() * TOPICS.length)];
+  const baseBody = postBodies[Math.floor(Math.random() * postBodies.length)];
+  
+  return {
+    space,
+    state,
+    title: `Test Post ${Math.random().toString(36).slice(2, 8)} - ${space}`,
+    body: `${baseBody} Generated at ${new Date().toISOString()} for space ${space}.`,
+    topic,
+    images: [] // Keep empty in CI to avoid validation issues
+  };
+}
 
 // Smoke test configuration: 50 VUs for 30 seconds
 export const options = {
@@ -53,6 +81,9 @@ export const options = {
     response_time: ['p(95)<500'],
     'status_codes{code:200}': ['count>100'], // Expect at least 100 successful requests
     'status_codes{code:201}': ['count>10'],  // Expect some creates
+    'http_status{code:422}': ['count==0'], // Expect zero validation errors
+    'http_status{code:401}': ['count==0'], // Expect zero auth errors
+    'http_status{code:400}': ['count==0'], // Expect zero bad requests
   },
   
   // Test metadata
@@ -215,16 +246,8 @@ function testGetPosts(headers) {
 }
 
 function testCreatePost(headers) {
-  const space = spaces[Math.floor(Math.random() * spaces.length)];
-  const body = postBodies[Math.floor(Math.random() * postBodies.length)];
-  const title = `Smoke Test Post ${Date.now()}`;
-  
-  const payload = {
-    space,
-    title,
-    body: `${body} (Generated at ${new Date().toISOString()})`,
-    topic: space === 'yap' ? 'random' : 'discussion'
-  };
+  // Generate 100% valid payload
+  const payload = validPost();
   
   const response = record(http.post(`${BASE_URL}/api/posts`, JSON.stringify(payload), { headers }));
   
@@ -233,8 +256,9 @@ function testCreatePost(headers) {
     'POST create response time < 1000ms': (r) => r.timings.duration < 1000,
     'POST create returns post ID': (r) => {
       try {
-        const body = JSON.parse(r.body);
-        return body.post && body.post.id;
+        const json = r.json();
+        // Handle multiple possible response shapes
+        return json?.post?._id || json?.post?.id || json?._id || json?.id;
       } catch {
         return false;
       }
@@ -245,12 +269,13 @@ function testCreatePost(headers) {
     errorRate.add(1);
   }
   
-  // Store created post ID
+  // Store created post ID with flexible ID extraction
   if (response.status === 201) {
     try {
-      const body = JSON.parse(response.body);
-      if (body.post && body.post.id) {
-        postIds.push(body.post.id);
+      const json = response.json();
+      const postId = json?.post?._id || json?.post?.id || json?._id || json?.id;
+      if (postId) {
+        postIds.push(postId);
       }
     } catch (e) {
       // Ignore parsing errors

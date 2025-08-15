@@ -147,6 +147,7 @@ jobs:
           BASE_URL: http://127.0.0.1:8080
           TOKEN: ${{ env.TOKEN }}
           K6_NO_USAGE_REPORT: true
+          K6_LOG_ERRORS: "1"
 
       - name: Check performance thresholds
         working-directory: india-news-app/load
