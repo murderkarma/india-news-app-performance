@@ -18,14 +18,18 @@ const analyticsService = require('./analyticsService');
 class NotificationTriggerService {
   constructor() {
     this.isEnabled = process.env.NOTIFICATIONS_ENABLED !== 'false';
-    logger.info('🔔 Notification Trigger Service initialized', { enabled: this.isEnabled });
+    this.testMode = process.env.TEST_MODE === 'true';
+    logger.info('🔔 Notification Trigger Service initialized', {
+      enabled: this.isEnabled,
+      testMode: this.testMode
+    });
   }
 
   /**
    * Trigger notification when someone comments on a user's post
    */
   async triggerCommentNotification(commentData) {
-    if (!this.isEnabled) return;
+    if (!this.isEnabled || this.testMode) return;
 
     try {
       const { postId, postAuthorId, commentAuthorId, commentAuthor, postTitle, space } = commentData;
@@ -99,7 +103,7 @@ class NotificationTriggerService {
    * Trigger notification when someone reacts to a user's post
    */
   async triggerReactionNotification(reactionData) {
-    if (!this.isEnabled) return;
+    if (!this.isEnabled || this.testMode) return;
 
     try {
       const { postId, postAuthorId, reactorId, reactor, reactionType, postTitle, space } = reactionData;
@@ -203,7 +207,7 @@ class NotificationTriggerService {
    * Trigger notification for moderation actions
    */
   async triggerModerationNotification(moderationData) {
-    if (!this.isEnabled) return;
+    if (!this.isEnabled || this.testMode) return;
 
     try {
       const { userId, moderatorId, moderator, action, reason, duration } = moderationData;
@@ -301,7 +305,7 @@ class NotificationTriggerService {
    * Trigger notification for general announcements (admin only)
    */
   async triggerAnnouncementNotification(announcementData) {
-    if (!this.isEnabled) return;
+    if (!this.isEnabled || this.testMode) return;
 
     try {
       const { title, message, targetUsers, senderId, sender } = announcementData;

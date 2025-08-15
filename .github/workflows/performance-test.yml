@@ -20,6 +20,9 @@ env:
   MONGODB_URI: mongodb://127.0.0.1:27017/yap_test
   NOTIFICATIONS_ENABLED: "false"
   IMAGE_UPLOADS_ENABLED: "false"
+  # Skip Redis rate limiting in CI
+  UPSTASH_REDIS_REST_URL: ""
+  UPSTASH_REDIS_REST_TOKEN: ""
 
 defaults:
   run:
@@ -95,9 +98,10 @@ jobs:
           MONGODB_URI: mongodb://127.0.0.1:27017/yap_test
           NOTIFICATIONS_ENABLED: "false"
           IMAGE_UPLOADS_ENABLED: "false"
-          REDIS_URL: redis://localhost:6379
-          UPSTASH_REDIS_REST_URL: http://localhost:6379
-          UPSTASH_REDIS_REST_TOKEN: fake-token-for-ci
+          # Skip Redis rate limiting in CI by not providing credentials
+          REDIS_URL: ""
+          UPSTASH_REDIS_REST_URL: ""
+          UPSTASH_REDIS_REST_TOKEN: ""
           CORS_ORIGINS: http://127.0.0.1:8080
 
       - name: Seed & get token
@@ -106,7 +110,7 @@ jobs:
           # Register test user (may fail if exists, that's OK)
           curl -fsS -X POST http://127.0.0.1:8080/api/auth/register \
             -H 'Content-Type: application/json' \
-            -d '{"username":"loadtest","password":"Passw0rd!","gender":"male","state":"assam"}' || true
+            -d '{"username":"loadtest","password":"Passw0rd!","gender":"male","state":"Assam"}' || true
 
           # Login and get token
           TOKEN=$(curl -fsS -X POST http://127.0.0.1:8080/api/auth/login \
@@ -161,8 +165,14 @@ jobs:
             // Print status code histogram
             console.log('=== Status Code Histogram ===');
             const statusCodes = results.metrics.status_codes?.values || {};
+            const httpStatus = results.metrics.http_status?.values || {};
+            
+            // Print both metrics for debugging
             Object.keys(statusCodes).forEach(code => {
-              console.log(\`Status \${code}: \${statusCodes[code]} requests\`);
+              console.log(\`StatusCodes \${code}: \${statusCodes[code]} requests\`);
+            });
+            Object.keys(httpStatus).forEach(status => {
+              console.log(\`HTTP Status \${status}: \${httpStatus[status]} requests\`);
             });
             
             // Check thresholds
@@ -230,11 +240,15 @@ jobs:
             const totalReqs = results.metrics.http_reqs?.values?.count || 0;
             const rps = results.metrics.http_reqs?.values?.rate || 0;
 
-            // Status code histogram
+            // Status code histogram - use http_status for better visibility
+            const httpStatus = results.metrics.http_status?.values || {};
             const statusCodes = results.metrics.status_codes?.values || {};
             let statusTable = '';
-            Object.keys(statusCodes).forEach(code => {
-              statusTable += `| ${code} | ${statusCodes[code]} |\n`;
+
+            // Combine both metrics
+            const allStatuses = { ...statusCodes, ...httpStatus };
+            Object.keys(allStatuses).forEach(code => {
+              statusTable += `| ${code} | ${allStatuses[code]} |\n`;
             });
 
             const passed = p95 <= 500 && errorRate <= 0.01;

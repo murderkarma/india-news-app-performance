@@ -6,21 +6,30 @@
 
 const { Redis } = require('@upstash/redis');
 
+// HARD SHORT-CIRCUIT for CI - no external calls in TEST_MODE
+const TEST_MODE = process.env.TEST_MODE === 'true';
+
+if (TEST_MODE) {
+  console.log('🚫 TEST_MODE: All Redis operations are NO-OPS (no external calls)');
+}
+
 // In-memory fallback for CI/test environments
 const memoryCache = new Map();
 
-// Check if Redis credentials are available
-const hasRedisCredentials = process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_REST_TOKEN;
+// Check if Redis credentials are available (only if not in TEST_MODE)
+const hasRedisCredentials = !TEST_MODE && process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_REST_TOKEN;
 
 const redis = hasRedisCredentials ? new Redis({
   url: process.env.UPSTASH_REDIS_REST_URL,
   token: process.env.UPSTASH_REDIS_REST_TOKEN,
 }) : null;
 
-console.log(`🔧 Redis client: ${hasRedisCredentials ? 'Upstash Redis' : 'In-memory fallback'}`);
+console.log(`🔧 Redis client: ${TEST_MODE ? 'NO-OP (TEST_MODE)' : hasRedisCredentials ? 'Upstash Redis' : 'In-memory fallback'}`);
 
 // JSON helpers (stringify/parse)
 async function rSetJSON(key, value, options = {}) {
+  if (TEST_MODE) return 'OK'; // HARD SHORT-CIRCUIT - no external calls
+  
   if (!redis) {
     // In-memory fallback
     memoryCache.set(key, JSON.stringify(value));
@@ -35,6 +44,8 @@ async function rSetJSON(key, value, options = {}) {
 }
 
 async function rGetJSON(key) {
+  if (TEST_MODE) return null; // HARD SHORT-CIRCUIT - no external calls
+  
   if (!redis) {
     // In-memory fallback
     const val = memoryCache.get(key);
@@ -49,6 +60,8 @@ async function rGetJSON(key) {
 
 // Simple counters (for cache stats / metrics)
 async function rIncr(key, options = {}) {
+  if (TEST_MODE) return 1; // HARD SHORT-CIRCUIT - no external calls
+  
   if (!redis) {
     // In-memory fallback
     const current = parseInt(memoryCache.get(key) || '0');
@@ -66,6 +79,8 @@ async function rIncr(key, options = {}) {
 }
 
 async function rExpire(key, seconds) {
+  if (TEST_MODE) return 1; // HARD SHORT-CIRCUIT - no external calls
+  
   if (!redis) {
     // In-memory fallback
     setTimeout(() => memoryCache.delete(key), seconds * 1000);
