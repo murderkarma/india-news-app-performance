@@ -1,4 +1,5 @@
 console.log("server.js loaded from:", __filename);
+// Trigger workflow test - validating performance fixes
 
 const mongoose = require('mongoose');
 const express = require('express');
