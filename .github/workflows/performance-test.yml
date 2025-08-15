@@ -85,9 +85,9 @@ jobs:
           MONGODB_URI: mongodb://127.0.0.1:27017/yap_test
           NOTIFICATIONS_ENABLED: "false"
           IMAGE_UPLOADS_ENABLED: "false"
-          REDIS_URL: ${{ secrets.UPSTASH_REDIS_URL || 'redis://localhost:6379' }}
-          UPSTASH_REDIS_REST_URL: ${{ secrets.UPSTASH_REDIS_REST_URL || 'http://localhost:6379' }}
-          UPSTASH_REDIS_REST_TOKEN: ${{ secrets.UPSTASH_REDIS_REST_TOKEN || 'fake-token' }}
+          REDIS_URL: redis://localhost:6379
+          UPSTASH_REDIS_REST_URL: http://localhost:6379
+          UPSTASH_REDIS_REST_TOKEN: fake-token-for-ci
           CORS_ORIGINS: http://127.0.0.1:8080
 
       - name: Seed & get token
