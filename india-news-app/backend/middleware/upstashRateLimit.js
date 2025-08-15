@@ -27,72 +27,71 @@ const readLimiter = new Ratelimit({
   prefix: 'rl:read',
 });
 
-function bypass(req) {
-  const shouldBypass = process.env.TEST_MODE === 'true' || req.headers['x-load-test'] === '1';
-  if (shouldBypass) {
-    console.log(`🚫 Rate limit bypassed for ${req.method} ${req.path} (TEST_MODE: ${process.env.TEST_MODE}, x-load-test: ${req.headers['x-load-test']})`);
-  }
-  return shouldBypass;
-}
+// Absolute bypass function for CI
+const isBypass = req => process.env.TEST_MODE === 'true' || req.headers['x-load-test'] === '1';
 
 function limitWrites() {
   return async (req, res, next) => {
-    // Early bypass check - no Redis calls at all
-    if (bypass(req)) return next();
+    // ABSOLUTE BYPASS for CI - no Redis calls, no delays
+    if (isBypass(req)) {
+      console.log(`🚫 ABSOLUTE BYPASS: Write limiter skipped for ${req.method} ${req.path}`);
+      return next();
+    }
     
-    // Skip rate limiting if Redis credentials are missing (CI environment)
+    // Skip rate limiting if Redis credentials are missing
     if (!process.env.UPSTASH_REDIS_REST_URL || !process.env.UPSTASH_REDIS_REST_TOKEN) {
-      console.log('⚠️  Skipping rate limiting - Redis credentials missing');
+      console.log('⚠️  Skipping write limiting - Redis credentials missing');
       return next();
     }
     
     try {
-      const key = req.user?.id ? `user:${req.user.id}` : `ip:${req.ip}`;
-      const { success, limit, remaining, reset } = await writeLimiter.limit(key);
+      const key = req.user?.id || req.ip || 'anon';
+      const resLimit = await writeLimiter.limit(key);
       
-      res.set('X-RateLimit-Limit', String(limit));
-      res.set('X-RateLimit-Remaining', String(remaining));
-      res.set('X-RateLimit-Reset', String(reset));
-      
-      if (!success) {
-        console.log(`🚫 Write rate limit exceeded for ${key}`);
-        return res.status(429).json({ error: 'Too many requests' });
+      // IMMEDIATE 429 - NO BLOCKING, NO RETRY-AFTER
+      if (!resLimit.success) {
+        console.log(`🚫 Write rate limit exceeded for ${key} - returning 429 immediately`);
+        return res.status(429).end();
       }
       
-      next();
+      return next();
     } catch (error) {
       console.error('Write rate limit error:', error.message);
       // Continue without rate limiting if Redis fails
-      next();
+      return next();
     }
   };
 }
 
 function limitReads() {
   return async (req, res, next) => {
-    // Early bypass check - no Redis calls at all
-    if (bypass(req)) return next();
+    // ABSOLUTE BYPASS for CI - no Redis calls, no delays
+    if (isBypass(req)) {
+      console.log(`🚫 ABSOLUTE BYPASS: Read limiter skipped for ${req.method} ${req.path}`);
+      return next();
+    }
     
-    // Skip rate limiting if Redis credentials are missing (CI environment)
+    // Skip rate limiting if Redis credentials are missing
     if (!process.env.UPSTASH_REDIS_REST_URL || !process.env.UPSTASH_REDIS_REST_TOKEN) {
-      console.log('⚠️  Skipping rate limiting - Redis credentials missing');
+      console.log('⚠️  Skipping read limiting - Redis credentials missing');
       return next();
     }
     
     try {
-      const key = req.user?.id ? `user:${req.user.id}` : `ip:${req.ip}`;
-      const { success } = await readLimiter.limit(key);
+      const key = req.user?.id || req.ip || 'anon';
+      const resLimit = await readLimiter.limit(key);
       
-      if (!success) {
-        console.log(`🚫 Read rate limit exceeded for ${key}`);
-        return res.status(429).json({ error: 'Too many requests' });
+      // IMMEDIATE 429 - NO BLOCKING, NO RETRY-AFTER
+      if (!resLimit.success) {
+        console.log(`🚫 Read rate limit exceeded for ${key} - returning 429 immediately`);
+        return res.status(429).end();
       }
       
-      next();
+      return next();
     } catch (error) {
       console.error('Read rate limit error:', error.message);
       // Continue without rate limiting if Redis fails
-      next();
+      return next();
     }
   };
 }
