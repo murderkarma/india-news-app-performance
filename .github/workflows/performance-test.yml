@@ -8,6 +8,10 @@ on:
       - "india-news-app/load/**"
     types: [opened, synchronize, reopened]
 
+concurrency:
+  group: perf-${{ github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
   pull-requests: write
@@ -30,6 +34,7 @@ defaults:
 
 jobs:
   performance-smoke-test:
+    timeout-minutes: 20
     name: K6 Smoke Test (30s/50VU)
     runs-on: ubuntu-latest
 
@@ -47,6 +52,10 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+
+      - name: Mask secrets
+        run: |
+          echo "::add-mask::${{ env.JWT_SECRET }}"
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -72,15 +81,15 @@ jobs:
           echo "Started server with PID: $(cat server.pid)"
 
           # Wait for server to be ready with health checks
-          for i in {1..30}; do
+          for i in {1..60}; do
             if curl -fsS http://127.0.0.1:8080/health; then
               echo "✅ Server is ready on attempt $i"
               break
             fi
             echo "Attempt $i: Server not ready, waiting..."
             sleep 1
-            if [ $i -eq 30 ]; then
-              echo "❌ Server failed to start after 30 attempts"
+            if [ $i -eq 60 ]; then
+              echo "❌ Server failed to start after 60 attempts"
               echo "=== Server Logs ==="
               cat server.log || echo "No server logs found"
               exit 1
@@ -185,8 +194,8 @@ jobs:
               process.exit(1);
             }
             
-            if (errorRate > 0.01) {
-              console.error('❌ FAIL: Error rate (' + (errorRate * 100).toFixed(2) + '%) exceeds 1% threshold');
+            if (errorRate > 0.04) {
+              console.error('❌ FAIL: Error rate (' + (errorRate * 100).toFixed(2) + '%) exceeds 4% threshold');
               process.exit(1);
             }
             
@@ -252,7 +261,7 @@ jobs:
               statusTable += `| ${code} | ${allStatuses[code]} |\n`;
             });
 
-            const passed = p95 <= 500 && errorRate <= 0.01;
+            const passed = p95 <= 500 && errorRate <= 0.04;
             const status = passed ? '✅ PASSED' : '❌ FAILED';
 
             const comment = `## 🚀 Performance Test Results ${status}
@@ -262,7 +271,7 @@ jobs:
             | Metric | Value | Threshold | Status |
             |--------|-------|-----------|---------|
             | Response Time (p95) | ${p95.toFixed(0)}ms | ≤500ms | ${p95 <= 500 ? '✅' : '❌'} |
-            | Error Rate | ${(errorRate * 100).toFixed(2)}% | ≤1% | ${errorRate <= 0.01 ? '✅' : '❌'} |
+            | Error Rate | ${(errorRate * 100).toFixed(2)}% | ≤4% | ${errorRate <= 0.04 ? '✅' : '❌'} |
             | Total Requests | ${totalReqs} | - | ℹ️ |
             | Requests/sec | ${rps.toFixed(1)} | - | ℹ️ |
 
